@@ -1055,6 +1055,48 @@ if is_service_enabled g-api g-reg; then
     start_glance
 fi
 
+# MDL: ADDING IMAGES TO GLANCE HERE
+# Install Images
+# ==============
+
+# Upload an image to glance.
+#
+# The default image is cirros, a small testing image which lets you login as **root**
+# cirros has a ``cloud-init`` analog supporting login via keypair and sending
+# scripts as userdata.
+# See https://help.ubuntu.com/community/CloudInit for more on cloud-init
+#
+# Override ``IMAGE_URLS`` with a comma-separated list of UEC images.
+#  * **oneiric**: http://uec-images.ubuntu.com/oneiric/current/oneiric-server-cloudimg-amd64.tar.gz
+#  * **precise**: http://uec-images.ubuntu.com/precise/current/precise-server-cloudimg-amd64.tar.gz
+
+if is_service_enabled g-reg; then
+    TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
+
+    if is_baremetal; then
+        echo_summary "Creating and uploading baremetal images"
+
+        # build and upload separate deploy kernel & ramdisk
+        upload_baremetal_deploy $TOKEN
+
+        # upload images, separating out the kernel & ramdisk for PXE boot
+        for image_url in ${IMAGE_URLS//,/ }; do
+            upload_baremetal_image $image_url $TOKEN
+        done
+    else
+        echo_summary "Uploading images"
+
+        # Option to upload legacy ami-tty, which works with xenserver
+        if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
+            IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
+        fi
+
+        for image_url in ${IMAGE_URLS//,/ }; do
+            upload_image $image_url $TOKEN
+        done
+    fi
+fi
+
 # Launch the Ironic services
 if is_service_enabled ir-api ir-cond; then
     echo_summary "Starting Ironic"
@@ -1090,6 +1132,12 @@ if is_service_enabled n-api; then
     start_nova_api
 fi
 
+#MDL: moved Nova start here
+if is_service_enabled nova; then
+    echo_summary "Starting Nova"
+    start_nova
+fi
+
 if is_service_enabled q-svc; then
     echo_summary "Starting Neutron"
     start_neutron_service_and_check
@@ -1118,10 +1166,11 @@ if is_service_enabled q-svc; then
     create_neutron_initial_network
     setup_neutron_debug
 fi
-if is_service_enabled nova; then
-    echo_summary "Starting Nova"
-    start_nova
-fi
+# MDL: moved Nova start to before Neutron start
+# if is_service_enabled nova; then
+#     echo_summary "Starting Nova"
+#     start_nova
+# fi
 if is_service_enabled cinder; then
     echo_summary "Starting Cinder"
     start_cinder
@@ -1166,46 +1215,47 @@ if is_service_enabled nova && is_service_enabled key; then
 fi
 
 
-# Install Images
-# ==============
+# MDL: DISABLED (this section was moved up right after starting glance)
+# # Install Images
+# # ==============
 
-# Upload an image to glance.
-#
-# The default image is cirros, a small testing image which lets you login as **root**
-# cirros has a ``cloud-init`` analog supporting login via keypair and sending
-# scripts as userdata.
-# See https://help.ubuntu.com/community/CloudInit for more on cloud-init
-#
-# Override ``IMAGE_URLS`` with a comma-separated list of UEC images.
-#  * **oneiric**: http://uec-images.ubuntu.com/oneiric/current/oneiric-server-cloudimg-amd64.tar.gz
-#  * **precise**: http://uec-images.ubuntu.com/precise/current/precise-server-cloudimg-amd64.tar.gz
+# # Upload an image to glance.
+# #
+# # The default image is cirros, a small testing image which lets you login as **root**
+# # cirros has a ``cloud-init`` analog supporting login via keypair and sending
+# # scripts as userdata.
+# # See https://help.ubuntu.com/community/CloudInit for more on cloud-init
+# #
+# # Override ``IMAGE_URLS`` with a comma-separated list of UEC images.
+# #  * **oneiric**: http://uec-images.ubuntu.com/oneiric/current/oneiric-server-cloudimg-amd64.tar.gz
+# #  * **precise**: http://uec-images.ubuntu.com/precise/current/precise-server-cloudimg-amd64.tar.gz
 
-if is_service_enabled g-reg; then
-    TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
+# if is_service_enabled g-reg; then
+#     TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
 
-    if is_baremetal; then
-        echo_summary "Creating and uploading baremetal images"
+#     if is_baremetal; then
+#         echo_summary "Creating and uploading baremetal images"
 
-        # build and upload separate deploy kernel & ramdisk
-        upload_baremetal_deploy $TOKEN
+#         # build and upload separate deploy kernel & ramdisk
+#         upload_baremetal_deploy $TOKEN
 
-        # upload images, separating out the kernel & ramdisk for PXE boot
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_baremetal_image $image_url $TOKEN
-        done
-    else
-        echo_summary "Uploading images"
+#         # upload images, separating out the kernel & ramdisk for PXE boot
+#         for image_url in ${IMAGE_URLS//,/ }; do
+#             upload_baremetal_image $image_url $TOKEN
+#         done
+#     else
+#         echo_summary "Uploading images"
 
-        # Option to upload legacy ami-tty, which works with xenserver
-        if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
-            IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
-        fi
+#         # Option to upload legacy ami-tty, which works with xenserver
+#         if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
+#             IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
+#         fi
 
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_image $image_url $TOKEN
-        done
-    fi
-fi
+#         for image_url in ${IMAGE_URLS//,/ }; do
+#             upload_image $image_url $TOKEN
+#         done
+#     fi
+# fi
 
 # If we are running nova with baremetal driver, there are a few
 # last-mile configuration bits to attend to, which must happen

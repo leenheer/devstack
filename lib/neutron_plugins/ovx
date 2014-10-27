@@ -1,0 +1,137 @@
+# OpenVirteX Neutron Plugin
+# Marc De Leenheer marc@onlab.us
+# ------------------------------
+
+# Save trace settings
+PG_XTRACE=$(set +o | grep xtrace)
+set +o xtrace
+
+source $TOP_DIR/lib/neutron_plugins/ovs_base
+
+function neutron_plugin_configure_dhcp_agent {
+    :
+}
+
+function neutron_setup_integration_bridge {
+    # Setup integration bridge if needed
+    neutron_ovs_base_cleanup
+    _neutron_ovs_base_setup_bridge $OVS_DATA_BRIDGE
+    _neutron_ovs_base_setup_bridge $OVS_CTRL_BRIDGE
+
+    # Create fake interfaces
+    # sudo ip tuntap add dev $OVS_DATA_INTERFACE mode tap
+    # sudo ip tuntap add dev $OVS_CTRL_INTERFACE mode tap
+
+    # Attach interfaces to bridge
+    # sudo ovs-vsctl --no-wait -- --may-exist add-port $OVS_DATA_BRIDGE $OVS_DATA_INTERFACE
+    # sudo ovs-vsctl --no-wait -- --may-exist add-port $OVS_CTRL_BRIDGE $OVS_CTRL_INTERFACE
+
+    # Point data bridge to OVX
+    sudo ovs-vsctl --no-wait set-controller $OVS_DATA_BRIDGE tcp:$OVX_OF_HOST:$OVX_OF_PORT
+
+    # Start bridges
+    sudo ifconfig $OVS_DATA_BRIDGE up
+    sudo ifconfig $OVS_CTRL_BRIDGE up
+}
+
+function neutron_plugin_create_nova_conf {
+    # if n-cpu is enabled, then setup integration bridge
+    if is_service_enabled n-cpu; then
+        neutron_setup_integration_bridge
+    fi
+}
+
+function neutron_plugin_setup_interface_driver {
+    local conf_file=$1
+    iniset $conf_file DEFAULT interface_driver neutron.agent.linux.interface.OVSInterfaceDriver
+}
+
+function neutron_plugin_install_agent_packages {
+    _neutron_ovs_base_install_agent_packages
+}
+
+# Q_PLUGIN_CONF_FILE=$Q_PLUGIN_CONF_PATH/$Q_PLUGIN_CONF_FILENAME
+
+function neutron_plugin_configure_common {
+    # Plugin config
+    Q_PLUGIN_CONF_PATH=etc/neutron/plugins/ovx
+    Q_PLUGIN_CONF_FILENAME=ovx.ini
+    Q_DB_NAME="ovx_neutron"
+    #Q_PLUGIN_CLASS="neutron.plugins.ovx.plugin.OVXNeutronPlugin"
+    Q_PLUGIN_CLASS="neutron.plugins.opencloud.opencloud_neutron_plugin.OpenCloudPluginV2"
+    # for unit testing - ignore for now
+    # OVX_DRIVER=${OVX_DRIVER:-neutron.plugins.ovx.fake_plumlib.Plumlib}
+
+    # OVX defaults
+    OVX_OF_HOST=${OVX_OF_HOST:-localhost}
+    OVX_OF_PORT=${OVX_OF_PORT:-6633}
+    OVX_API_HOST=${OVX_API_HOST:-localhost}
+    OVX_API_PORT=${OVX_API_PORT:-8080}
+    OVX_USERNAME=${OVX_USERNAME:-admin}
+    OVX_PASSWORD=${OVX_PASSWORD:-}
+
+    # Nova defaults
+    NOVA_USERNAME=${NOVA_USERNAME:-admin}
+    NOVA_PASSWORD=${NOVA_PASSWORD:-}
+    NOVA_PROJECT_ID=${NOVA_PROJECT_ID:-admin}
+    NOVA_AUTH_URL=${NOVA_AUTH_URL:-http://localhost:5000/v2.0/}
+    NOVA_IMAGE_NAME=${NOVA_IMAGE_NAME:-cirros-0.3.1-x86_64-uec}
+    NOVA_IMAGE_PORT=${NOVA_IMAGE_PORT:-10000}
+    NOVA_FLAVOR=${NOVA_FLAVOR:-m1.tiny}
+
+    # OVS defaults
+    OVS_DATA_BRIDGE=${OVS_DATA_BRIDGE:-br-int}
+    OVS_DATA_INTERFACE=${OVS_DATA_INTERFACE:-eth0}
+    OVS_CTRL_BRIDGE=${OVS_CTRL_BRIDGE:-br-ctl}
+    OVS_CTRL_INTERFACE=${OVS_CTRL_INTERFACE:-eth1}
+}
+
+function neutron_plugin_configure_service {
+    iniset /$Q_PLUGIN_CONF_FILE ovx of_host $OVX_OF_HOST
+    iniset /$Q_PLUGIN_CONF_FILE ovx of_port $OVX_OF_PORT
+    iniset /$Q_PLUGIN_CONF_FILE ovx api_host $OVX_API_HOST
+    iniset /$Q_PLUGIN_CONF_FILE ovx api_port $OVX_API_PORT
+    iniset /$Q_PLUGIN_CONF_FILE ovx username $OVX_USERNAME
+    iniset /$Q_PLUGIN_CONF_FILE ovx password $OVX_PASSWORD
+    # iniset /$Q_PLUGIN_CONF_FILE ovx driver $OVX_DRIVER
+
+    iniset /$Q_PLUGIN_CONF_FILE nova username $NOVA_USERNAME
+    iniset /$Q_PLUGIN_CONF_FILE nova password $NOVA_PASSWORD
+    iniset /$Q_PLUGIN_CONF_FILE nova project_id $NOVA_PROJECT_ID
+    iniset /$Q_PLUGIN_CONF_FILE nova auth_url $NOVA_AUTH_URL
+    iniset /$Q_PLUGIN_CONF_FILE nova image_name $NOVA_IMAGE_NAME
+    iniset /$Q_PLUGIN_CONF_FILE nova image_port $NOVA_IMAGE_PORT
+    iniset /$Q_PLUGIN_CONF_FILE nova flavor $NOVA_FLAVOR
+
+    iniset /$Q_PLUGIN_CONF_FILE ovs data_bridge $OVS_DATA_BRIDGE
+    iniset /$Q_PLUGIN_CONF_FILE ovs ctrl_bridge $OVS_CTRL_BRIDGE
+}
+
+function neutron_plugin_configure_debug_command {
+    :
+}
+
+function neutron_plugin_configure_l3_agent {
+    die $LINENO "q-l3 must not be executed with OVX plugin!"
+}
+
+function neutron_plugin_configure_plugin_agent {
+    AGENT_BINARY="$NEUTRON_BIN_DIR/neutron-ovx-agent"
+}
+
+function is_neutron_ovs_base_plugin {
+    # True
+    return 0
+}
+
+function has_neutron_plugin_security_group {
+    # False
+    return 1
+}
+
+function neutron_plugin_check_adv_test_requirements {
+    is_service_enabled q-agt && is_service_enabled q-dhcp && return 0
+}
+
+# Restore xtrace
+$PG_XTRACE
