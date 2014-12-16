@@ -52,7 +52,7 @@ function neutron_plugin_configure_common {
     Q_PLUGIN_CLASS="neutron.plugins.ovx.plugin.OVXNeutronPlugin"
     #Q_PLUGIN_CLASS="neutron.plugins.opencloud.opencloud_neutron_plugin.OpenCloudPluginV2"
     # for unit testing - ignore for now
-    # OVX_DRIVER=${OVX_DRIVER:-neutron.plugins.ovx.fake_plumlib.Plumlib}
+    # OVX_DRIVER=${OVX_DRIVER:-neutron.plugins.ovx.fake_ovxlib.OVX}
 
     # OVX defaults
     OVX_OF_HOST=${OVX_OF_HOST:-localhost}

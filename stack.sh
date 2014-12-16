@@ -1055,7 +1055,8 @@ if is_service_enabled g-api g-reg; then
     start_glance
 fi
 
-# MDL: ADDING IMAGES TO GLANCE HERE
+# OVX: Adding images immediately after starting glance
+#
 # Install Images
 # ==============
 
@@ -1132,7 +1133,10 @@ if is_service_enabled n-api; then
     start_nova_api
 fi
 
-#MDL: moved Nova start here
+# OVX: We need to start Nova before Neutron, otherwise
+# Neutron will try to create networks and will fail
+# to spawn a controller for that network.
+#
 if is_service_enabled nova; then
     echo_summary "Starting Nova"
     start_nova
@@ -1166,7 +1170,8 @@ if is_service_enabled q-svc; then
     create_neutron_initial_network
     setup_neutron_debug
 fi
-# MDL: moved Nova start to before Neutron start
+# OVX: Moved Nova start to before Neutron
+#
 # if is_service_enabled nova; then
 #     echo_summary "Starting Nova"
 #     start_nova
@@ -1215,7 +1220,8 @@ if is_service_enabled nova && is_service_enabled key; then
 fi
 
 
-# MDL: DISABLED (this section was moved up right after starting glance)
+# OVX: Moved installing images right after starting glance.
+#
 # # Install Images
 # # ==============
 
